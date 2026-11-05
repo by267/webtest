@@ -1,18 +1,27 @@
 <?php
 header('Content-Type: application/json; charset=utf-8');
 
-// Lee las credenciales directamente desde el entorno seguro de Railway
+// Permitir que tu frontend HTML haga peticiones a esta API
+header("Access-Control-Allow-Origin: *");
+header("Access-Control-Allow-Headers: Content-Type");
+header("Access-Control-Allow-Methods: GET, POST, PUT, DELETE");
+header("Content-Type: application/json; charset=UTF-8");
+
+// Leer credenciales seguras inyectadas por Railway
 $host = getenv('MYSQLHOST');
+$port = getenv('MYSQLPORT');
 $dbname = getenv('MYSQLDATABASE');
 $user = getenv('MYSQLUSER');
 $password = getenv('MYSQLPASSWORD');
-$port = getenv('MYSQLPORT');
 
 try {
-    $pdo = new PDO("mysql:host=$host;port=$port;dbname=$dbname;charset=utf8", $user, $password);
+    // Conexión segura usando PDO
+    $pdo = new PDO("mysql:host=$host;port=$port;dbname=$dbname;charset=utf8mb4", $user, $password);
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    $pdo->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
 } catch (PDOException $e) {
-    die("Error de conexión: " . $e->getMessage());
+    echo json_encode(["error" => "Error de conexión a la base de datos: " . $e->getMessage()]);
+    exit;
 }
 
 $action = $_GET['action'] ?? '';
