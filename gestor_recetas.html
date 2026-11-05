@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestor de Recetas - Mareas Bytes</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .lista-productos { max-height: 75vh; overflow-y: auto; }
+        .producto-item { cursor: pointer; transition: 0.2s; }
+        .producto-item:hover { background-color: #f8f9fa; }
+        .producto-item.active { background-color: #0d6efd; color: white; font-weight: bold; }
+    </style>
+</head>
+<body class="bg-light">
+
+<div class="container-fluid py-4 px-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="fw-bold mb-0">Gestor de Recetas / Escandallos</h2>
+        <a href="index.html" class="btn btn-outline-dark">Volver al Punto de Venta</a>
+    </div>
+
+    <div id="alerta" class="alert d-none" role="alert"></div>
+
+    <div class="row">
+        <!-- COLUMNA IZQUIERDA: LISTA DE PRODUCTOS -->
+        <div class="col-md-4">
+            <div class="card shadow-sm border-0">
+                <div class="card-header bg-dark text-white fw-bold">
+                    1. Selecciona un Platillo/Bebida
+                </div>
+                <ul class="list-group list-group-flush lista-productos" id="listaProductos">
+                    <!-- Cargado por JS -->
+                </ul>
+            </div>
+        </div>
+
+        <!-- COLUMNA DERECHA: CONSTRUCTOR DE LA RECETA -->
+        <div class="col-md-8">
+            <div class="card shadow-sm border-0" id="panelReceta" style="display: none;">
+                <div class="card-header bg-primary text-white fw-bold d-flex justify-content-between align-items-center">
+                    <span id="tituloReceta">Construyendo receta...</span>
+                    <button class="btn btn-sm btn-light fw-bold text-primary" onclick="guardarReceta()">💾 Guardar Receta Completa</button>
+                </div>
+                <div class="card-body">
+                    
+                    <!-- AGREGAR INGREDIENTE NUEVO -->
+                    <div class="row g-2 mb-4 bg-light p-3 rounded border">
+                        <div class="col-md-7">
+                            <label class="form-label small fw-bold text-muted">Insumo a agregar</label>
+                            <select id="selectNuevoInsumo" class="form-select"></select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small fw-bold text-muted">Cantidad</label>
+                            <input type="number" step="0.01" id="inputNuevaCantidad" class="form-control" placeholder="Ej. 150">
+                        </div>
+                        <div class="col-md-2 d-flex align-items-end">
+                            <button class="btn btn-success w-100 fw-bold" onclick="agregarFila()">➕ Añadir</button>
+                        </div>
+                    </div>
+
+                    <!-- TABLA DE LA RECETA ACTUAL -->
+                    <table class="table table-hover align-middle">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Insumo / Ingrediente</th>
+                                <th>Área</th>
+                                <th class="text-end">Cantidad</th>
+                                <th>Unidad</th>
+                                <th class="text-center">Quitar</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tablaRecetaBody">
+                            <!-- Cargado por JS -->
+                        </tbody>
+                    </table>
+                    
+                    <div id="mensajeVacio" class="text-center text-muted py-4 d-none">
+                        <em>Este producto aún no tiene ingredientes. Añade el primero arriba.</em>
+                    </div>
+
+                </div>
+            </div>
+            
+            <div class="text-center text-muted mt-5" id="mensajeInicial">
+                <h4>⬅️ Selecciona un producto a la izquierda</h4>
+                <p>para ver o modificar sus ingredientes.</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let productosGlobal = [];
+let insumosGlobal = [];
+let recetasGlobal = [];
+
+let productoSeleccionadoId = null;
+let recetaActualEnEdicion = []; // Array temporal para editar antes de guardar
+
+async function cargarDatos() {
+    try {
+        const res = await fetch('api.php?action=cargar_gestor_recetas');
+        const data = await res.json();
+        
+        productosGlobal = data.productos;
+        insumosGlobal = data.insumos;
+        recetasGlobal = data.recetas;
+
+        renderizarListaProductos();
+        llenarSelectInsumos();
+    } catch (err) {
+        mostrarAlerta('Error de conexión con la base de datos.', 'danger');
+    }
+}
+
+function renderizarListaProductos() {
+    const lista = document.getElementById('listaProductos');
+    lista.innerHTML = productosGlobal.map(p => `
+        <li class="list-group-item producto-item d-flex justify-content-between align-items-start" 
+            id="prod-${p.id}" onclick="seleccionarProducto(${p.id})">
+            <div>
+                <div class="fw-bold">${p.descripcion}</div>
+                <small class="text-muted">${p.categoria}</small>
+            </div>
+        </li>
+    `).join('');
+}
+
+function llenarSelectInsumos() {
+    const select = document.getElementById('selectNuevoInsumo');
+    select.innerHTML = insumosGlobal.map(i => 
+        `<option value="${i.id}">[${i.area}] ${i.nombre} (${i.unidad})</option>`
+    ).join('');
+}
+
+function seleccionarProducto(id) {
+    productoSeleccionadoId = id;
+    
+    // Resaltar seleccionado en la lista
+    document.querySelectorAll('.producto-item').forEach(el => el.classList.remove('active'));
+    document.getElementById(`prod-${id}`).classList.add('active');
+
+    // Ocultar mensaje inicial, mostrar panel
+    document.getElementById('mensajeInicial').style.display = 'none';
+    document.getElementById('panelReceta').style.display = 'block';
+
+    const producto = productosGlobal.find(p => parseInt(p.id) === id);
+    document.getElementById('tituloReceta').textContent = `Receta para: ${producto.descripcion}`;
+
+    // Cargar ingredientes actuales desde los datos globales
+    const ingredientesOriginales = recetasGlobal.filter(r => parseInt(r.producto_id) === id);
+    
+    // Clonar para edición local
+    recetaActualEnEdicion = ingredientesOriginales.map(ing => ({
+        insumo_id: parseInt(ing.insumo_id),
+        cantidad: parseFloat(ing.cantidad_requerida)
+    }));
+
+    renderizarTablaReceta();
+}
+
+function renderizarTablaReceta() {
+    const tbody = document.getElementById('tablaRecetaBody');
+    const msjVacio = document.getElementById('mensajeVacio');
+    
+    if (recetaActualEnEdicion.length === 0) {
+        tbody.innerHTML = '';
+        msjVacio.classList.remove('d-none');
+        return;
+    }
+    
+    msjVacio.classList.add('d-none');
+
+    tbody.innerHTML = recetaActualEnEdicion.map((item, index) => {
+        const insumoObj = insumosGlobal.find(i => parseInt(i.id) === item.insumo_id);
+        if (!insumoObj) return '';
+
+        return `
+            <tr>
+                <td class="fw-semibold">${insumoObj.nombre}</td>
+                <td><span class="badge bg-secondary">${insumoObj.area}</span></td>
+                <td class="text-end">
+                    <input type="number" step="0.01" class="form-control form-control-sm text-end d-inline-block w-75" 
+                           value="${item.cantidad}" onchange="actualizarCantidadFila(${index}, this.value)">
+                </td>
+                <td>${insumoObj.unidad}</td>
+                <td class="text-center">
+                    <button class="btn btn-sm btn-outline-danger" onclick="eliminarFila(${index})" title="Quitar">❌</button>
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
+
+function agregarFila() {
+    const insumo_id = parseInt(document.getElementById('selectNuevoInsumo').value);
+    const cantidad = parseFloat(document.getElementById('inputNuevaCantidad').value);
+
+    if (isNaN(cantidad) || cantidad <= 0) {
+        alert("Por favor ingresa una cantidad válida mayor a 0.");
+        return;
+    }
+
+    // Verificar si el insumo ya está en la receta
+    const indexExistente = recetaActualEnEdicion.findIndex(i => i.insumo_id === insumo_id);
+    if (indexExistente >= 0) {
+        // Si existe, le suma la cantidad
+        recetaActualEnEdicion[indexExistente].cantidad += cantidad;
+    } else {
+        // Si no, lo agrega como fila nueva
+        recetaActualEnEdicion.push({ insumo_id: insumo_id, cantidad: cantidad });
+    }
+
+    document.getElementById('inputNuevaCantidad').value = ''; // Limpiar input
+    renderizarTablaReceta();
+}
+
+function actualizarCantidadFila(index, nuevaCantidad) {
+    const val = parseFloat(nuevaCantidad);
+    if (!isNaN(val) && val > 0) {
+        recetaActualEnEdicion[index].cantidad = val;
+    }
+}
+
+function eliminarFila(index) {
+    recetaActualEnEdicion.splice(index, 1);
+    renderizarTablaReceta();
+}
+
+async function guardarReceta() {
+    if (!productoSeleccionadoId) return;
+
+    // Preparar el cuerpo JSON
+    const payload = {
+        producto_id: productoSeleccionadoId,
+        ingredientes: recetaActualEnEdicion
+    };
+
+    try {
+        const res = await fetch('api.php?action=guardar_receta', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        const json = await res.json();
+        
+        if (res.ok) {
+            mostrarAlerta(json.mensaje, 'success');
+            // Refrescar datos globales en segundo plano para sincronizar
+            fetch('api.php?action=cargar_gestor_recetas')
+                .then(r => r.json())
+                .then(data => { recetasGlobal = data.recetas; });
+        } else {
+            mostrarAlerta(json.error, 'danger');
+        }
+    } catch (err) {
+        mostrarAlerta('Error de red al guardar.', 'danger');
+    }
+}
+
+function mostrarAlerta(texto, tipo) {
+    const a = document.getElementById('alerta');
+    a.className = `alert alert-${tipo}`;
+    a.textContent = texto;
+    a.classList.remove('d-none');
+    setTimeout(() => a.classList.add('d-none'), 4000);
+}
+
+// Inicializar la página
+cargarDatos();
+</script>
+</body>
+</html>

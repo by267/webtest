@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mareas Bytes - POS e Inventario</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .area-BEBIDAS { border-left: 4px solid #0d6efd; }
+        .area-COMIDA { border-left: 4px solid #198754; }
+        .area-NIEVE { border-left: 4px solid #fd7e14; }
+        .area-SUBRECETA { border-left: 4px solid #6c757d; } /* Color Gris */
+    </style>
+</head>
+<body class="bg-light">
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="fw-bold mb-0">Mareas Bytes - Control Operativo</h2>
+    <div>
+        <a href="gestor_recetas.html" class="btn btn-warning fw-bold me-2">⚙️ Modificar Recetas</a>
+        <button class="btn btn-sm btn-outline-dark" onclick="cargarEstado()">Actualizar 🔄</button>
+    </div>
+</div>
+
+    <div class="row g-4">
+        <!-- SECCIÓN DE OPERACIONES -->
+        <div class="col-md-5">
+            <!-- CAJA / POS -->
+            <div class="card shadow-sm mb-4 border-dark">
+                <div class="card-header bg-dark text-white fw-bold">🛒 Punto de Venta</div>
+                <div class="card-body">
+                    <form id="formVenta">
+                        <div class="mb-3">
+                            <label class="form-label text-muted small fw-bold">PRODUCTO A VENDER</label>
+                            <select id="selectProducto" class="form-select" required></select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label text-muted small fw-bold">CANTIDAD (ÓRDENES)</label>
+                            <input type="number" id="inputCantidadVenta" class="form-control" value="1" min="1" required>
+                        </div>
+                        <button type="submit" class="btn btn-primary w-100 fw-bold py-2">COBRAR Y PREPARAR</button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- ALMACÉN -->
+            <div class="card shadow-sm border-secondary">
+                <div class="card-header bg-secondary text-white fw-bold">📦 Ingreso de Mercancía</div>
+                <div class="card-body bg-white">
+                    <form id="formEntrada">
+                        <div class="mb-3">
+                            <label class="form-label text-muted small fw-bold">INSUMO COMPRADO</label>
+                            <select id="selectInsumo" class="form-select" required onchange="mostrarInfoPaquete()"></select>
+                            <div id="infoPaquete" class="form-text text-success fw-semibold mt-1"></div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label text-muted small fw-bold">CANTIDAD COMPRADA (CAJAS / PAQUETES)</label>
+                            <input type="number" step="0.1" id="inputCantidadEntrada" class="form-control" placeholder="Ej. 2 cajas" required>
+                        </div>
+                        <button type="submit" class="btn btn-success w-100 fw-bold py-2">INGRESAR AL KARDEX</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- SECCIÓN DE REPORTES -->
+        <div class="col-md-7">
+            <!-- STOCK EN TIEMPO REAL -->
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-light fw-bold d-flex justify-content-between align-items-center">
+                    Stock de Insumos Físicos
+                    <button class="btn btn-sm btn-outline-dark" onclick="cargarEstado()">Actualizar 🔄</button>
+                </div>
+                <div class="card-body p-0" style="max-height: 400px; overflow-y: auto;">
+                    <table class="table table-hover mb-0 align-middle text-sm">
+                        <thead class="table-dark position-sticky top-0">
+                            <tr>
+                                <th>Área</th>
+                                <th>Insumo</th>
+                                <th class="text-end">Stock Actual</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tablaInsumos"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- KARDEX -->
+            <div class="card shadow-sm">
+                <div class="card-header bg-light fw-bold">Historial de Movimientos (Kardex)</div>
+                <div class="card-body p-0" style="max-height: 250px; overflow-y: auto;">
+                    <table class="table table-sm table-striped mb-0 align-middle" style="font-size: 0.85rem;">
+                        <thead class="table-light position-sticky top-0">
+                            <tr>
+                                <th>Fecha</th>
+                                <th>Insumo</th>
+                                <th class="text-end">Cant.</th>
+                                <th>Motivo</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tablaKardex"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let insumosGlobal = [];
+
+async function cargarEstado() {
+    try {
+        const res = await fetch('api.php?action=estado');
+        const data = await res.json();
+        insumosGlobal = data.insumos;
+
+        // Productos
+        document.getElementById('selectProducto').innerHTML = data.productos.map(p => 
+            `<option value="${p.id}">[${p.categoria}] ${p.descripcion} - $${p.precio_venta}</option>`
+        ).join('');
+
+        // Insumos para Entrada
+        document.getElementById('selectInsumo').innerHTML = data.insumos.map(i => 
+            `<option value="${i.id}">${i.nombre} (${i.area})</option>`
+        ).join('');
+        mostrarInfoPaquete();
+
+        // Tabla Stock
+        document.getElementById('tablaInsumos').innerHTML = data.insumos.map(i => {
+            const stock = parseFloat(i.stock_actual);
+            let color = stock <= i.stock_minimo ? 'text-danger fw-bold' : '';
+            return `
+                <tr class="area-${i.area}">
+                    <td class="small text-muted fw-bold">${i.area}</td>
+                    <td>${i.nombre}</td>
+                    <td class="text-end font-monospace ${color}">${stock.toFixed(2)} ${i.unidad}</td>
+                </tr>
+            `;
+        }).join('');
+
+        // Tabla Kardex
+        document.getElementById('tablaKardex').innerHTML = data.kardex.map(k => {
+            const c = parseFloat(k.cantidad);
+            const clase = c > 0 ? 'text-success fw-bold' : 'text-danger';
+            return `
+                <tr>
+                    <td class="text-muted">${k.fecha_corta}</td>
+                    <td class="fw-semibold">${k.insumo}</td>
+                    <td class="text-end font-monospace ${clase}">${c > 0 ? '+' : ''}${c.toFixed(2)} ${k.abreviatura}</td>
+                    <td class="text-truncate" style="max-width: 150px;" title="${k.observaciones}">${k.observaciones}</td>
+                </tr>
+            `;
+        }).join('');
+
+    } catch (err) {
+        mostrarAlerta('Error de conexión con la base de datos.', 'danger');
+    }
+}
+
+function mostrarInfoPaquete() {
+    const id = parseInt(document.getElementById('selectInsumo').value);
+    const insumo = insumosGlobal.find(i => parseInt(i.id) === id);
+    if(insumo) {
+        const total = insumo.paquetes_por_compra * insumo.contenido_por_paquete;
+        document.getElementById('infoPaquete').textContent = 
+            `💡 1 Unidad de compra equivale a ${total} ${insumo.unidad} (Calculado de: ${insumo.paquetes_por_compra} paquetes de ${insumo.contenido_por_paquete}${insumo.unidad})`;
+    }
+}
+
+// Venta
+document.getElementById('formVenta').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const body = {
+        producto_id: document.getElementById('selectProducto').value,
+        cantidad: document.getElementById('inputCantidadVenta').value
+    };
+    const res = await fetch('api.php?action=vender', { method: 'POST', body: JSON.stringify(body) });
+    const json = await res.json();
+    mostrarAlerta(res.ok ? json.mensaje : json.error, res.ok ? 'success' : 'danger');
+    if(res.ok) cargarEstado();
+});
+
+// Entrada
+document.getElementById('formEntrada').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const body = {
+        insumo_id: document.getElementById('selectInsumo').value,
+        cantidad: document.getElementById('inputCantidadEntrada').value
+    };
+    const res = await fetch('api.php?action=entrada', { method: 'POST', body: JSON.stringify(body) });
+    const json = await res.json();
+    mostrarAlerta(res.ok ? json.mensaje : json.error, res.ok ? 'success' : 'danger');
+    if(res.ok) {
+        document.getElementById('inputCantidadEntrada').value = '';
+        cargarEstado();
+    }
+});
+
+function mostrarAlerta(texto, tipo) {
+    const a = document.getElementById('alerta');
+    a.className = `alert alert-${tipo}`;
+    a.textContent = texto;
+    setTimeout(() => a.classList.add('d-none'), 4000);
+}
+
+cargarEstado();
+</script>
+</body>
+</html>
