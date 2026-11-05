@@ -10,7 +10,7 @@ header("Content-Type: application/json; charset=UTF-8");
 // Leer credenciales seguras inyectadas por Railway
 $host = getenv('MYSQLHOST');
 $port = getenv('MYSQLPORT');
-$dbname = getenv('mareas_bytes_db');
+$dbname = 'mareas_bytes_db';
 $user = getenv('MYSQLUSER');
 $password = getenv('MYSQLPASSWORD');
 
