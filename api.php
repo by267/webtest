@@ -8,11 +8,11 @@ header("Access-Control-Allow-Methods: GET, POST, PUT, DELETE");
 header("Content-Type: application/json; charset=UTF-8");
 
 // Leer credenciales seguras inyectadas por Railway
-$host = getenv('MYSQL_HOST');
-$port = getenv('MYSQL_PORT');
-$dbname = getenv('MYSQL_DATABASE');
-$user = getenv('MYSQL_USER');
-$password = getenv('MYSQL_PASSWORD');
+$host = getenv('MYSQLHOST');
+$port = getenv('MYSQLPORT');
+$dbname = getenv('MYSQLDATABASE');
+$user = getenv('MYSQLUSER');
+$password = getenv('MYSQLPASSWORD');
 
 try {
     // Conexión segura usando PDO
