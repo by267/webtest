@@ -1,20 +1,18 @@
 <?php
 header('Content-Type: application/json; charset=utf-8');
 
-$host = '127.0.0.1';
-$db   = 'mareas_bytes_db';
-$user = 'root';
-$pass = '123456';
+// Lee las credenciales directamente desde el entorno seguro de Railway
+$host = getenv('MYSQLHOST');
+$dbname = getenv('MYSQLDATABASE');
+$user = getenv('MYSQLUSER');
+$password = getenv('MYSQLPASSWORD');
+$port = getenv('MYSQLPORT');
 
 try {
-    $pdo = new PDO("mysql:host=$host;dbname=$db;charset=utf8mb4", $user, $pass, [
-        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC
-    ]);
+    $pdo = new PDO("mysql:host=$host;port=$port;dbname=$dbname;charset=utf8", $user, $password);
+    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 } catch (PDOException $e) {
-    http_response_code(500);
-    echo json_encode(['error' => 'Error de conexión: ' . $e->getMessage()]);
-    exit;
+    die("Error de conexión: " . $e->getMessage());
 }
 
 $action = $_GET['action'] ?? '';
